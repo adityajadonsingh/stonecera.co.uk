@@ -15,11 +15,11 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
     return categories.map(cat => ({
       name: cat.name,
       slug: cat.slug,
-      images: cat.images?.map(img => ({
+      images: cat.images ? cat.images?.map(img => ({
         id: img.id,
         url: img.url,
         alt: img.alternativeText,
-      })),
+      })) : [],
     }));
   },
 
@@ -68,7 +68,9 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
           select: ["name", "slug"],
           populate: {
             images: { select: ["id", "url", "alternativeText"] },
-            variation: true,
+            variation: {
+              where: filters.Price ? { Price: filters.Price } : {},  // Apply price filter directly to the variations
+            },
           },
         },
         seo: true,
@@ -81,13 +83,8 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
 
     // Filter the products based on the price filter and the provided filters
     const filteredProducts = category.products.filter(prod => {
-      return prod.variation.some(variation => {
+      const filteredVariations = prod.variation.filter(variation => {
         let match = true;
-
-        // Price filter check: Only include variations that match the price filter
-        if (filters.Price && !(variation.Price >= filters.Price.$gte && variation.Price <= filters.Price.$lte)) {
-          match = false;
-        }
 
         // Apply other filters (colorTone, finish, thickness, size)
         if (filters["variation.ColorTone"] && filters["variation.ColorTone"] !== variation.ColorTone) {
@@ -105,6 +102,9 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
 
         return match;
       });
+
+      // Only return product if there is at least one valid variation
+      return filteredVariations.length > 0;
     });
 
     // Recalculate filter counts based on the filtered results
