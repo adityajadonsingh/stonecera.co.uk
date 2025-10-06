@@ -1,6 +1,6 @@
 interface ImageAttributes {
   url: string;
-  alternativeText: string;
+  alt: string;
 }
 interface ProductVariation {
   SKU: string;
@@ -20,6 +20,16 @@ export interface Category {
   short_description: string;
   images: ImageAttributes[];
   products: CategoryProduct[];
+  filterCounts?: FilterCounts;
+}
+export interface FilterCounts {
+  price: Record<string, number>;
+  colorTone: Record<string, number>;
+  finish: Record<string, number>;
+  thickness: Record<string, number>;
+  size: Record<string, number>;
+  pcs: Record<string, number>;
+  packSize: Record<string, number>;
 }
 export interface CategoryProduct {
   variation: ProductVariation;

@@ -1,9 +1,10 @@
-const { createCoreController } = require('@strapi/strapi').factories;
+const { createCoreController } = require("@strapi/strapi").factories;
 
 module.exports = createCoreController("api::category.category", ({ strapi }) => ({
   // /api/categories
   async customList(ctx) {
     const categories = await strapi.db.query("api::category.category").findMany({
+      distinct: ["slug"],
       select: ["name", "slug"],
       populate: {
         images: {
@@ -12,54 +13,35 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       },
     });
 
-    return categories.map(cat => ({
+    return categories.map((cat) => ({
       name: cat.name,
       slug: cat.slug,
-      images: cat.images ? cat.images?.map(img => ({
-        id: img.id,
-        url: img.url,
-        alt: img.alternativeText,
-      })) : [],
+      images: cat.images
+        ? cat.images.map((img) => ({
+            id: img.id,
+            url: img.url,
+            alt: img.alternativeText,
+          }))
+        : [],
     }));
   },
 
   // /api/category/:slug
   async customDetail(ctx) {
     const { slug } = ctx.params;
-    const { price, colorTone, finish, thickness, size } = ctx.query; // Capture filter parameters
+    const { price, colorTone, finish, thickness, size } = ctx.query;
 
-    let filters = {};
-    let filterCounts = {
-      price: {},
-      colorTone: {},
-      finish: {},
-      thickness: {},
-      size: {},
-    };
-
-    // Function to handle the filter for each field (handle single values for now)
-    const handleSingleFilter = (filterValues) => {
-      return filterValues ? filterValues.trim() : null;
-    };
-
-    // Apply filters only if values are provided in the query parameters
+    const filters = {};
     if (price) {
-      const [minPrice, maxPrice] = price.split('-').map(Number);
+      const [minPrice, maxPrice] = price.split("-").map(Number);
       filters.Price = { $gte: minPrice, $lte: maxPrice };
     }
-    if (colorTone) {
-      filters["variation.ColorTone"] = handleSingleFilter(colorTone); // Single value for colorTone
-    }
-    if (finish) {
-      filters["variation.Finish"] = handleSingleFilter(finish); // Single value for finish
-    }
-    if (thickness) {
-      filters["variation.Thickness"] = handleSingleFilter(thickness); // Single value for thickness
-    }
-    if (size) {
-      filters["variation.Size"] = handleSingleFilter(size); // Single value for size
-    }
+    if (colorTone) filters["variation.ColorTone"] = colorTone.trim();
+    if (finish) filters["variation.Finish"] = finish.trim();
+    if (thickness) filters["variation.Thickness"] = thickness.trim();
+    if (size) filters["variation.Size"] = size.trim();
 
+    // ✅ 1. Fetch category with all products and variations (for counts and filtering)
     const category = await strapi.db.query("api::category.category").findOne({
       where: { slug },
       populate: {
@@ -68,125 +50,160 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
           select: ["name", "slug"],
           populate: {
             images: { select: ["id", "url", "alternativeText"] },
-            variation: {
-              where: filters.Price ? { Price: filters.Price } : {},  // Apply price filter directly to the variations
-            },
+            variation: true, // fetch all variations
           },
         },
         seo: true,
       },
     });
 
-    if (!category) {
-      return ctx.notFound("Category not found");
-    }
+    if (!category) return ctx.notFound("Category not found");
 
-    // Filter the products based on the price filter and the provided filters
-    const filteredProducts = category.products.filter(prod => {
-      const filteredVariations = prod.variation.filter(variation => {
-        let match = true;
+    // ✅ 2. Build filter counts using *all* variations (independent of active filters)
+    const filterCounts = {
+      price: {},
+      colorTone: {},
+      finish: {},
+      thickness: {},
+      size: {},
+      pcs: {},
+      packSize: {},
+    };
 
-        // Apply other filters (colorTone, finish, thickness, size)
-        if (filters["variation.ColorTone"] && filters["variation.ColorTone"] !== variation.ColorTone) {
-          match = false;
-        }
-        if (filters["variation.Finish"] && filters["variation.Finish"] !== variation.Finish) {
-          match = false;
-        }
-        if (filters["variation.Thickness"] && filters["variation.Thickness"] !== variation.Thickness) {
-          match = false;
-        }
-        if (filters["variation.Size"] && filters["variation.Size"] !== variation.Size) {
-          match = false;
+    const priceRanges = [
+      { label: "0-200", min: 0, max: 200 },
+      { label: "200-300", min: 200, max: 300 },
+      { label: "300-500", min: 300, max: 500 },
+      { label: "500-1000", min: 500, max: 1000 },
+      { label: "1000-2000", min: 1000, max: 2000 },
+    ];
+
+    category.products.forEach((prod) => {
+      prod.variation.forEach((variation) => {
+        const { Price, ColorTone, Finish, Thickness, Size, Pcs, PackSize } = variation;
+
+        // Price range counts
+        if (Price != null) {
+          for (const range of priceRanges) {
+            if (Price >= range.min && Price < range.max) {
+              filterCounts.price[range.label] = (filterCounts.price[range.label] || 0) + 1;
+              break;
+            }
+          }
         }
 
-        return match;
+        if (ColorTone)
+          filterCounts.colorTone[ColorTone] =
+            (filterCounts.colorTone[ColorTone] || 0) + 1;
+
+        if (Finish)
+          filterCounts.finish[Finish] =
+            (filterCounts.finish[Finish] || 0) + 1;
+
+        if (Thickness)
+          filterCounts.thickness[Thickness] =
+            (filterCounts.thickness[Thickness] || 0) + 1;
+
+        if (Size)
+          filterCounts.size[Size] =
+            (filterCounts.size[Size] || 0) + 1;
+
+        if (Pcs)
+          filterCounts.pcs[String(Pcs)] =
+            (filterCounts.pcs[String(Pcs)] || 0) + 1;
+
+        if (PackSize)
+          filterCounts.packSize[String(PackSize)] =
+            (filterCounts.packSize[String(PackSize)] || 0) + 1;
       });
-
-      // Only return product if there is at least one valid variation
-      return filteredVariations.length > 0;
     });
 
-    // Recalculate filter counts based on the filtered results
-    filteredProducts.forEach(prod => {
-      prod.variation.forEach(variation => {
-        // Price filter count (only valid products within the price range)
-        if (filters.Price && (variation.Price >= filters.Price.$gte && variation.Price <= filters.Price.$lte)) {
-          const priceRange = `${Math.floor(variation.Price / 100) * 100}-${Math.floor(variation.Price / 100) * 100 + 100}`;
-          filterCounts.price[priceRange] = (filterCounts.price[priceRange] || 0) + 1;
-        }
+    // ✅ 3. Filter products based on active filters (for visible results)
+    const filteredProducts = category.products
+      .map((prod) => {
+        const filteredVariations = prod.variation.filter((variation) => {
+          let match = true;
 
-        // ColorTone filter count
-        if (!filters["variation.ColorTone"] || filters["variation.ColorTone"] === variation.ColorTone) {
-          filterCounts.colorTone[variation.ColorTone] = (filterCounts.colorTone[variation.ColorTone] || 0) + 1;
-        }
+          if (filters.Price) {
+            if (
+              variation.Price < filters.Price.$gte ||
+              variation.Price > filters.Price.$lte
+            ) {
+              match = false;
+            }
+          }
 
-        // Finish filter count
-        if (!filters["variation.Finish"] || filters["variation.Finish"] === variation.Finish) {
-          filterCounts.finish[variation.Finish] = (filterCounts.finish[variation.Finish] || 0) + 1;
-        }
+          if (
+            filters["variation.ColorTone"] &&
+            variation.ColorTone !== filters["variation.ColorTone"]
+          )
+            match = false;
 
-        // Thickness filter count
-        if (!filters["variation.Thickness"] || filters["variation.Thickness"] === variation.Thickness) {
-          filterCounts.thickness[variation.Thickness] = (filterCounts.thickness[variation.Thickness] || 0) + 1;
-        }
+          if (
+            filters["variation.Finish"] &&
+            variation.Finish !== filters["variation.Finish"]
+          )
+            match = false;
 
-        // Size filter count
-        if (!filters["variation.Size"] || filters["variation.Size"] === variation.Size) {
-          filterCounts.size[variation.Size] = (filterCounts.size[variation.Size] || 0) + 1;
-        }
-      });
-    });
+          if (
+            filters["variation.Thickness"] &&
+            variation.Thickness !== filters["variation.Thickness"]
+          )
+            match = false;
 
+          if (
+            filters["variation.Size"] &&
+            variation.Size !== filters["variation.Size"]
+          )
+            match = false;
+
+          return match;
+        });
+
+        return { ...prod, variation: filteredVariations };
+      })
+      .filter((prod) => prod.variation.length > 0);
+
+    // ✅ 4. Prepare clean response structure
     return {
       name: category.name,
       slug: category.slug,
       short_description: category.short_description,
-      images: category.images?.map(img => ({
+      images: category.images?.map((img) => ({
         id: img.id,
         url: img.url,
         alt: img.alternativeText,
       })),
-      products: filteredProducts.map(prod => {
-        const variations = prod.variation || [];
-        let chosenVariation = null;
-
-        if (variations.length === 1) {
-          chosenVariation = variations[0];
-        } else if (variations.length > 1) {
-          const available = variations.filter(v => v.Stock > 0);
-          if (available.length > 0) {
-            chosenVariation = available.reduce((min, v) => v.Price < min.Price ? v : min);
-          } else {
-            chosenVariation = variations[0];
-          }
-        }
-
+      products: filteredProducts.map((prod) => {
+        const v = prod.variation?.[0];
         return {
-          variation: {
-            SKU: chosenVariation?.SKU,
-            Thickness: chosenVariation?.Thickness,
-            Size: chosenVariation?.Size,
-            Finish: chosenVariation?.Finish,
-            PackSize: chosenVariation?.PackSize,
-            Pcs: chosenVariation?.Pcs,
-            Stock: chosenVariation?.Stock,
-            ColorTone: chosenVariation?.ColorTone,
-            Price: chosenVariation?.Price,
-          },
+          variation: v
+            ? {
+                SKU: v.SKU,
+                Thickness: v.Thickness,
+                Size: v.Size,
+                Finish: v.Finish,
+                PackSize: v.PackSize,
+                Pcs: v.Pcs,
+                Stock: v.Stock,
+                ColorTone: v.ColorTone,
+                Price: v.Price,
+              }
+            : undefined,
           product: {
             name: prod.name,
             slug: prod.slug,
-            images: prod.images?.map(img => ({
-              id: img.id,
-              url: img.url,
-              alt: img.alternativeText,
-            })),
+            images:
+              prod.images?.map((img) => ({
+                id: img.id,
+                url: img.url,
+                alt: img.alternativeText,
+              })) ?? [],
           },
         };
       }),
       seo: category.seo,
-      filterCounts, // Send filter count data
+      filterCounts,
     };
   },
 }));
