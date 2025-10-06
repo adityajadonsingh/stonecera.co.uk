@@ -1,5 +1,4 @@
 "use client";
-
 import { useRouter } from "next/navigation";
 
 interface PaginationProps {
@@ -19,8 +18,21 @@ export default function Pagination({
 
   const handleNavigation = (page: number) => {
     const params = new URLSearchParams(currentFilters);
-    params.set("page", String(page));
-    router.push(`/product-category/${category}?${params.toString()}`);
+
+    // Remove previous "page" if present
+    params.delete("page");
+
+    const qs = params.toString();
+
+    // ✅  build proper URL based on page number
+    let targetUrl = "";
+    if (page === 1) {
+      targetUrl = `/product-category/${category}${qs ? `?${qs}` : ""}`;
+    } else {
+      targetUrl = `/product-category/${category}/page/${page}${qs ? `?${qs}` : ""}`;
+    }
+
+    router.push(targetUrl);
   };
 
   if (totalPages <= 1) return null;

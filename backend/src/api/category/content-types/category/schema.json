@@ -41,6 +41,10 @@
       "type": "component",
       "component": "seo.meta",
       "repeatable": false
+    },
+    "categoryDiscount": {
+      "type": "integer",
+      "default": 0
     }
   }
 }

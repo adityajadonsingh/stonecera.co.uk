@@ -31,6 +31,7 @@ export default function Filters({
 
     // Keep scroll position; push new URL with updated filters
     router.push(`${pathname}?${params.toString()}`, { scroll: false });
+    window.location.assign(`${pathname}?${params.toString()}`);
   };
 
   // Renders a UI section for any filter list

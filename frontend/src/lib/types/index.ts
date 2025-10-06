@@ -17,9 +17,11 @@ interface ProductVariation {
 export interface Category {
   name: string;
   slug: string;
+  categoryDiscount: number;
   short_description: string;
   images: ImageAttributes[];
   products: CategoryProduct[];
+  totalProducts: number
   filterCounts?: FilterCounts;
 }
 export interface FilterCounts {
@@ -38,5 +40,6 @@ export interface CategoryProduct {
 export interface Product {
   name: string;
   slug: string;
+  productDiscount: number;
   images: ImageAttributes[];
 }

@@ -1,7 +1,7 @@
-// /product-category/[category]/page.tsx
 import Filters from "@/components/category/Filter";
 import Pagination from "@/components/category/Pagination";
 import ProductGrid from "@/components/product/ProductGrid";
+import ProductsPerPageSelector from "@/components/product/ProductsPerPageSelector";
 import { getCategoryBySlug } from "@/lib/api/category";
 import { notFound, redirect } from "next/navigation";
 
@@ -12,13 +12,17 @@ export default async function CategoryPage(props: {
   const { category } = await props.params;
   const searchParams = await props.searchParams;
 
+  // Determine current page
   const page = parseInt(searchParams.page || "1", 10);
-  if (page === 1 && searchParams.page)
+  if (page === 1 && searchParams.page) {
     redirect(`/product-category/${category}`);
+  }
 
-  const limit = 10;
+  // Number of products per page (default 10)
+  const limit = parseInt(searchParams.limit || "12", 10);
   const offset = (page - 1) * limit;
 
+  // Fetch category data
   const categoryData = await getCategoryBySlug(category, {
     ...Object.fromEntries(Object.entries(searchParams)),
     limit,
@@ -27,8 +31,18 @@ export default async function CategoryPage(props: {
 
   if (!categoryData.name) return notFound();
 
-  const totalProducts = categoryData.products?.length || 0;
+  const totalProducts = categoryData.totalProducts || 0;
   const totalPages = Math.ceil(totalProducts / limit);
+
+  const safeFilterCounts = categoryData.filterCounts ?? {
+    price: {},
+    colorTone: {},
+    finish: {},
+    thickness: {},
+    size: {},
+    pcs: {},
+    packSize: {},
+  };
 
   return (
     <>
@@ -47,23 +61,24 @@ export default async function CategoryPage(props: {
             <Filters
               currentFilters={searchParams}
               categorySlug={category}
-              filterCounts={
-                categoryData.filterCounts ?? {
-                  price: {},
-                  colorTone: {},
-                  finish: {},
-                  thickness: {},
-                  size: {},
-                  pcs: {},
-                  packSize: {},
-                }
-              }
+              filterCounts={safeFilterCounts}
             />
           </div>
 
           {/* Products + Pagination */}
           <div className="lg:col-span-3">
+            {/* ✅ Products‑per‑page dropdown */}
+            <div className="flex justify-end mb-4">
+              <ProductsPerPageSelector
+                currentLimit={limit}
+                currentFilters={searchParams}
+                categorySlug={category}
+                currentPage={page}
+              />
+            </div>
+
             <ProductGrid products={categoryData.products} />
+
             <Pagination
               totalPages={totalPages}
               currentPage={page}

@@ -18,6 +18,10 @@
       "type": "uid",
       "targetField": "name"
     },
+    "productDiscount": {
+      "type": "integer",
+      "default": 0
+    },
     "images": {
       "type": "media",
       "multiple": true,

@@ -1,5 +1,3 @@
-"use client";
-
 import Image from "next/image";
 import Link from "next/link";
 import type { CategoryProduct } from "@/lib/types";
@@ -21,7 +19,7 @@ export default function ProductGrid({ products }: ProductGridProps) {
     <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 my-8">
       {products.map(({ product, variation }) => (
         <Link
-          href={`/product/${product.slug}`}
+          href={`/product/${product.slug}/`}
           key={product.slug}
           className="border rounded-md p-3 hover:shadow-md transition"
         >
