@@ -1,8 +1,5 @@
 const { createCoreController } = require("@strapi/strapi").factories;
 
-/**
- * Predefined sets for filters that must always appear even when count = 0
- */
 const ENUMS = {
   thickness: [
     "THICKNESS 12-20MM",
@@ -49,7 +46,7 @@ const ENUMS = {
 };
 
 module.exports = createCoreController("api::category.category", ({ strapi }) => ({
-  // /api/categories
+  // ----------------------------------------------------------------
   async customList(ctx) {
     const categories = await strapi.db.query("api::category.category").findMany({
       distinct: ["slug"],
@@ -73,7 +70,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
     }));
   },
 
-  // /api/category/:slug
+  // ----------------------------------------------------------------
   async customDetail(ctx) {
     const { slug } = ctx.params;
     const { price, colorTone, finish, thickness, size } = ctx.query;
@@ -89,7 +86,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
     if (thickness) filters["variation.Thickness"] = thickness.trim();
     if (size) filters["variation.Size"] = size.trim();
 
-    // 2️⃣ Fetch category with all products + variations
+    // 2️⃣ Fetch category with products + variations
     const category = await strapi.db.query("api::category.category").findOne({
       where: { slug },
       populate: {
@@ -106,6 +103,15 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
     });
 
     if (!category) return ctx.notFound("Category not found");
+
+    // --- Compute Price for each variation based on PackSize * Per_m2
+    category.products.forEach((prod) => {
+      prod.variation.forEach((v) => {
+        const per_m2 = typeof v.Per_m2 === "number" ? v.Per_m2 : 0;
+        const pack = typeof v.PackSize === "number" ? v.PackSize : 0;
+        v.Price = per_m2 && pack ? parseFloat((pack * per_m2).toFixed(2)) : 0;
+      });
+    });
 
     // 3️⃣ Prepare base filter counts
     const filterCounts = {
@@ -127,7 +133,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
     ];
     priceRanges.forEach((r) => (filterCounts.price[r.label] = 0));
 
-    // 4️⃣ Filter products by all active filters (used for display only)
+    // 4️⃣ Filter products by all active filters (for display)
     const filteredProducts = category.products
       .map((prod) => {
         const filteredVariations = prod.variation.filter((v) => {
@@ -151,10 +157,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
             v.Thickness !== filters["variation.Thickness"]
           )
             match = false;
-          if (
-            filters["variation.Size"] &&
-            v.Size !== filters["variation.Size"]
-          )
+          if (filters["variation.Size"] && v.Size !== filters["variation.Size"])
             match = false;
           return match;
         });
@@ -162,7 +165,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       })
       .filter((prod) => prod.variation.length > 0);
 
-    // helper to compute counts excluding one key (prevents self-filtering)
+    // helper for counts
     const computeVisibleCount = (excludeKey) => {
       const active = Object.entries(filters).reduce((acc, [key, val]) => {
         if (key !== excludeKey) acc[key] = val;
@@ -172,7 +175,10 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
         .map((prod) => {
           const variations = prod.variation.filter((v) => {
             let match = true;
-            if (active.Price && (v.Price < active.Price.$gte || v.Price > active.Price.$lte))
+            if (
+              active.Price &&
+              (v.Price < active.Price.$gte || v.Price > active.Price.$lte)
+            )
               match = false;
             if (
               active["variation.ColorTone"] &&
@@ -199,8 +205,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       return subset;
     };
 
-    // 5️⃣ Calculate counts independently per group
-    // --- Price ---
+    // 5️⃣ Count each filter group options
     computeVisibleCount("Price").forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.Price != null) {
@@ -212,7 +217,6 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // --- ColorTone ---
     computeVisibleCount("variation.ColorTone").forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.ColorTone && filterCounts.colorTone[v.ColorTone] != null)
@@ -220,7 +224,6 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // --- Finish ---
     computeVisibleCount("variation.Finish").forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.Finish)
@@ -229,7 +232,6 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // --- Thickness ---
     computeVisibleCount("variation.Thickness").forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.Thickness && filterCounts.thickness[v.Thickness] != null)
@@ -237,7 +239,6 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // --- Size ---
     computeVisibleCount("variation.Size").forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.Size && filterCounts.size[v.Size] != null)
@@ -245,7 +246,6 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // --- Pcs / PackSize (simple aggregate from filtered set)
     filteredProducts.forEach((prod) => {
       prod.variation.forEach((v) => {
         if (v.Pcs)
@@ -257,32 +257,83 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       });
     });
 
-    // 6️⃣ Pagination (limit + offset)
-    const start = parseInt(ctx.query.offset || 0, 10);
-    const limit = parseInt(ctx.query.limit || 12, 10);
+    // 6️⃣ Pagination
+    const start = parseInt(ctx.query.offset || 0);
+    const limit = parseInt(ctx.query.limit || 12);
     const paginatedProducts = filteredProducts.slice(start, start + limit);
 
-    // 7️⃣ Build final response
+    // 7️⃣ Prepare final products
     const productsResponse = paginatedProducts.map((prod) => {
-      const v = prod.variation?.[0];
+      const variations = prod.variation || [];
+      let chosenVariation = null;
+
+      if (variations.length === 1) chosenVariation = variations[0];
+      else if (variations.length > 1) {
+        const inStock = variations.filter(
+          (v) =>
+            typeof v.Per_m2 === "number" &&
+            typeof v.Stock === "number" &&
+            v.Stock > 0
+        );
+        const outOfStock = variations.filter(
+          (v) => typeof v.Per_m2 === "number" && v.Stock <= 0
+        );
+
+        if (inStock.length)
+          chosenVariation = inStock.reduce((min, v) =>
+            v.Per_m2 < (min.Per_m2 ?? Infinity) ? v : min
+          );
+        else if (outOfStock.length)
+          chosenVariation = outOfStock.reduce((min, v) =>
+            v.Per_m2 < (min.Per_m2 ?? Infinity) ? v : min
+          );
+        else chosenVariation = variations[0];
+      }
+
+      const v = chosenVariation;
+      const perM2 = typeof v?.Per_m2 === "number" ? v.Per_m2 : 0;
+      const pack = typeof v?.PackSize === "number" ? v.PackSize : 0;
+      const price = perM2 && pack ? parseFloat((perM2 * pack).toFixed(2)) : 0;
+
+      // compute discounts
+      const prodDisc = prod.productDiscount ?? 0;
+      const catDisc = category.categoryDiscount ?? 0;
+      const usedDiscount =
+        prodDisc && prodDisc > 0
+          ? prodDisc
+          : catDisc && catDisc > 0
+          ? catDisc
+          : 0;
+
+      let priceBeforeDiscount = null;
+      if (usedDiscount > 0) {
+        const mul = 1 + usedDiscount / 100;
+        priceBeforeDiscount = {
+          Per_m2: parseFloat((perM2 * mul).toFixed(2)),
+          Price: parseFloat((price * mul).toFixed(2)),
+        };
+      }
+
       return {
-        variation: v
-          ? {
-              SKU: v.SKU,
-              Thickness: v.Thickness,
-              Size: v.Size,
-              Finish: v.Finish,
-              PackSize: v.PackSize,
-              Pcs: v.Pcs,
-              Stock: v.Stock,
-              ColorTone: v.ColorTone,
-              Price: v.Price,
-            }
-          : undefined,
+        variation: {
+          id: v.uuid,
+          SKU: v.SKU,
+          Per_m2: perM2,
+          Thickness: v.Thickness,
+          Size: v.Size,
+          Finish: v.Finish,
+          PackSize: v.PackSize,
+          Pcs: v.Pcs,
+          Stock: v.Stock,
+          ColorTone: v.ColorTone,
+          Price: price,
+        },
+        priceBeforeDiscount,
         product: {
           name: prod.name,
           slug: prod.slug,
-          productDiscount: prod.productDiscount,
+          productDiscount: prod.productDiscount ?? 0,
+          categoryDiscount: category.categoryDiscount ?? 0,
           images:
             prod.images?.map((img) => ({
               id: img.id,
@@ -295,7 +346,7 @@ module.exports = createCoreController("api::category.category", ({ strapi }) => 
       };
     });
 
-    // 8️⃣ Return response
+    // 8️⃣ Return
     return {
       name: category.name,
       slug: category.slug,

@@ -12,6 +12,7 @@ interface ProductVariation {
   Stock: number;
   ColorTone: string;
   Price: number;
+  Per_m2: number;
 }
 
 export interface Category {
@@ -21,9 +22,19 @@ export interface Category {
   short_description: string;
   images: ImageAttributes[];
   products: CategoryProduct[];
-  totalProducts: number
+  totalProducts: number;
   filterCounts?: FilterCounts;
 }
+
+export interface CategoryProduct {
+  variation: ProductVariation;
+  product: Product;
+  priceBeforeDiscount?: {
+    Per_m2: number;
+    Price: number;
+  } | null;
+}
+
 export interface FilterCounts {
   price: Record<string, number>;
   colorTone: Record<string, number>;
@@ -33,13 +44,11 @@ export interface FilterCounts {
   pcs: Record<string, number>;
   packSize: Record<string, number>;
 }
-export interface CategoryProduct {
-  variation: ProductVariation;
-  product: Product;
-}
+
 export interface Product {
   name: string;
   slug: string;
   productDiscount: number;
+  categoryDiscount: number;
   images: ImageAttributes[];
 }

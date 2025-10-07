@@ -40,6 +40,7 @@ export interface ProductProductVariation extends Struct.ComponentSchema {
     >;
     PackSize: Schema.Attribute.Decimal;
     Pcs: Schema.Attribute.Integer;
+    Per_m2: Schema.Attribute.Decimal;
     Price: Schema.Attribute.Decimal;
     Size: Schema.Attribute.Enumeration<
       [
@@ -73,6 +74,7 @@ export interface ProductProductVariation extends Struct.ComponentSchema {
         'THICKNESS 68MM',
       ]
     >;
+    uuid: Schema.Attribute.String;
   };
 }
 

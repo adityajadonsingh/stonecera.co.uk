@@ -29,9 +29,18 @@ export default function Filters({
       params.set(filterName, value);
     }
 
-    // Keep scroll position; push new URL with updated filters
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-    window.location.assign(`${pathname}?${params.toString()}`);
+    // Always reset "page" when filters change
+    params.delete("page");
+
+    // ✅ Build URL for base category (not pagination)
+    const targetUrl = `/product-category/${categorySlug}${
+      params.toString() ? `?${params.toString()}` : ""
+    }`;
+
+    // You can either use router.push + refresh (SPA)
+    router.push(targetUrl, { scroll: false });
+    // router.refresh();
+    window.location.assign(targetUrl);
   };
 
   // Renders a UI section for any filter list

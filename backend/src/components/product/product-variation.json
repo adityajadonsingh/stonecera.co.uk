@@ -5,6 +5,9 @@
   },
   "options": {},
   "attributes": {
+    "uuid": {
+      "type": "string"
+    },
     "SKU": {
       "type": "string"
     },
@@ -84,6 +87,9 @@
       ]
     },
     "Price": {
+      "type": "decimal"
+    },
+    "Per_m2": {
       "type": "decimal"
     }
   },
