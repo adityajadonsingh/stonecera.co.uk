@@ -61,7 +61,7 @@ export default function Filters({
           return (
             <label
               key={name}
-              className={`flex items-center space-x-1 text-sm ${
+              className={`flex items-center space-x-2 text-sm ${
                 count === 0 ? "opacity-50 cursor-not-allowed" : "cursor-pointer"
               }`}
             >
@@ -70,7 +70,7 @@ export default function Filters({
                 disabled={count === 0}
                 checked={checked}
                 onChange={() => handleChange(fieldName, name)}
-                className="accent-black"
+                className="accent-black cursor-pointer"
               />
               <span>
                 {title === "Price" && name.includes("-")

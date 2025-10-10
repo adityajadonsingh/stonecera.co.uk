@@ -61,6 +61,7 @@ module.exports = createCoreController("api::product.product", ({ strapi }) => ({
       }
 
       return {
+        id: prod.id,
         name: prod.name,
         slug: prod.slug,
         productDiscount: prod.productDiscount ?? 0,
@@ -153,6 +154,7 @@ module.exports = createCoreController("api::product.product", ({ strapi }) => ({
     }
 
     return {
+      id: prod.id,
       name: prod.name,
       slug: prod.slug,
       productDiscount: prod.productDiscount ?? 0,

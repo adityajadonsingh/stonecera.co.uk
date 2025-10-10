@@ -1,0 +1,13 @@
+{
+  "collectionName": "components_input_fields_addresses",
+  "info": {
+    "displayName": "address"
+  },
+  "options": {},
+  "attributes": {
+    "address": {
+      "type": "text"
+    }
+  },
+  "config": {}
+}

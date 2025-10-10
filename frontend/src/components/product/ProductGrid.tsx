@@ -75,11 +75,11 @@ export default function ProductGrid({ products }: ProductGridProps) {
                 <span className="text-gray-400 font-medium">Per m²</span>
                 {hasDiscount && (
                   <span className="line-through ml-1 text-gray-500">
-                    £{priceBeforeDiscount?.Per_m2.toFixed(2)}
+                    £{priceBeforeDiscount?.Per_m2}
                   </span>
                 )}
                 <span className="ml-2 font-bold text-yellow-400">
-                  £{variation.Per_m2.toFixed(2)}
+                  £{variation.Per_m2}
                 </span>
               </div>
 
@@ -88,11 +88,11 @@ export default function ProductGrid({ products }: ProductGridProps) {
                 <span className="text-gray-400 font-medium">Per Pack</span>
                 {hasDiscount && (
                   <span className="line-through ml-1 text-gray-500">
-                    £{priceBeforeDiscount?.Price.toFixed(2)}
+                    £{priceBeforeDiscount?.Price}
                   </span>
                 )}
                 <span className="ml-2 font-bold text-yellow-400">
-                  £{variation.Price.toFixed(2)}
+                  £{variation.Price}
                 </span>
               </div>
             </div>

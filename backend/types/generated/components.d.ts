@@ -1,5 +1,25 @@
 import type { Schema, Struct } from '@strapi/strapi';
 
+export interface InputFieldsAddress extends Struct.ComponentSchema {
+  collectionName: 'components_input_fields_addresses';
+  info: {
+    displayName: 'address';
+  };
+  attributes: {
+    address: Schema.Attribute.Text;
+  };
+}
+
+export interface InputFieldsPhone extends Struct.ComponentSchema {
+  collectionName: 'components_input_fields_phones';
+  info: {
+    displayName: 'phone';
+  };
+  attributes: {
+    phone: Schema.Attribute.String;
+  };
+}
+
 export interface ProductProductVariation extends Struct.ComponentSchema {
   collectionName: 'components_product_product_variations';
   info: {
@@ -74,7 +94,7 @@ export interface ProductProductVariation extends Struct.ComponentSchema {
         'THICKNESS 68MM',
       ]
     >;
-    uuid: Schema.Attribute.String;
+    uuid: Schema.Attribute.Integer;
   };
 }
 
@@ -103,6 +123,8 @@ export interface SeoMeta extends Struct.ComponentSchema {
 declare module '@strapi/strapi' {
   export module Public {
     export interface ComponentSchemas {
+      'input-fields.address': InputFieldsAddress;
+      'input-fields.phone': InputFieldsPhone;
       'product.product-variation': ProductProductVariation;
       'seo.meta': SeoMeta;
     }

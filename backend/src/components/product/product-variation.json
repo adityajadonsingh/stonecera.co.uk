@@ -6,7 +6,7 @@
   "options": {},
   "attributes": {
     "uuid": {
-      "type": "string"
+      "type": "integer"
     },
     "SKU": {
       "type": "string"

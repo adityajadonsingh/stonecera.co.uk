@@ -47,6 +47,12 @@
       "type": "component",
       "component": "seo.meta",
       "repeatable": false
+    },
+    "carts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::cart.cart",
+      "mappedBy": "product"
     }
   }
 }
