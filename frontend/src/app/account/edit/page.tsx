@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "Edit Profile",
 };
 
-export default async function EditProfilePage(): Promise<JSX.Element> {
+export default async function EditProfilePage(){
   const user = await getCurrentUser();
   if (!user) {
     redirect("/login");

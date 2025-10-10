@@ -110,8 +110,8 @@ export default function AuthMenu({ user }: Props) {
       </div>
     );
   }
-
-  const avatarUrl = localUser.userDetails?.profileImage?.url ?? "/media/user.png";
+  const profileImage = localUser.userDetails?.profileImage;
+  const avatarUrl =  localUser.userDetails?.profileImage?.url ?? "/media/user.png";
   const displayName = localUser.userDetails?.fullName ?? localUser.username ?? localUser.email ?? "User";
 
   return (
@@ -124,7 +124,7 @@ export default function AuthMenu({ user }: Props) {
       >
         {typeof avatarUrl === "string" && avatarUrl.startsWith("http") ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={displayName} className="w-8 h-8 rounded-full object-cover" />
+          <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />
         ) : (
           <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />
         )}
