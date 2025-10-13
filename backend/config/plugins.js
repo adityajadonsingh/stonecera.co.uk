@@ -2,7 +2,7 @@
 export default ({ env }) => ({
   email: {
     config: {
-      provider: "smtp", // Strapi resolves to '@strapi/provider-email-smtp'
+      provider: "@strapi/provider-email-nodemailer", // Strapi resolves to '@strapi/provider-email-smtp'
       providerOptions: {
         host: env("SMTP_HOST", "smtp.gmail.com"),
         port: env.int("SMTP_PORT", 587),
