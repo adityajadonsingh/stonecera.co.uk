@@ -6,124 +6,60 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { AppUser } from "@/lib/types";
 
-interface Props {
-  user?: AppUser | null;
-}
-
-export default function AuthMenu({ user }: Props) {
+export default function AuthMenu() {
+  const [user, setUser] = useState<AppUser | null | undefined>(undefined); // undefined = loading
+  const [open, setOpen] = useState(false);
   const router = useRouter();
 
-  // undefined = loading / not fetched yet; null = no user; AppUser = logged in
-  const [localUser, setLocalUser] = useState<AppUser | null | undefined>(user ?? undefined);
-  const [open, setOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
+  async function fetchUser(): Promise<void> {
+    try {
+      const res = await fetch("/api/auth/me", { credentials: "include", cache: "no-store" });
+      if (!res.ok) {
+        setUser(null);
+        return;
+      }
+      const json = (await res.json()) as AppUser | null;
+      setUser(json);
+    } catch (err) {
+      setUser(null);
+    }
+  }
 
   useEffect(() => {
-    let mounted = true;
-    const controller = new AbortController();
-
-    async function fetchUser(): Promise<void> {
-      try {
-        const res = await fetch("/api/auth/me", { cache: "no-store", credentials: "include", signal: controller.signal });
-        if (!mounted) return;
-        if (res.ok) {
-          const json = (await res.json()) as AppUser | null;
-          setLocalUser(json);
-        } else {
-          setLocalUser(null);
-        }
-      } catch (err) {
-        if (!controller.signal.aborted && mounted) setLocalUser(null);
-      }
-    }
-
-    // fetch on mount to ensure we are in sync
     void fetchUser();
-
-    // Event handlers (same-tab and cross-tabs)
-    function onAuth(): void {
+    // Listen for auth events from login/logout/user-details forms
+    function onAuth() {
       void fetchUser();
     }
-    function onStorage(e: StorageEvent): void {
-      if (e.key === "auth") void fetchUser();
-    }
-
     window.addEventListener("auth", onAuth);
-    window.addEventListener("storage", onStorage);
-
+    window.addEventListener("storage", (e) => { if (e.key === "auth") void fetchUser(); });
     return () => {
-      mounted = false;
-      controller.abort();
       window.removeEventListener("auth", onAuth);
-      window.removeEventListener("storage", onStorage);
     };
   }, []);
 
-  // Unified logout used inside header dropdown
-  async function handleLogout(): Promise<void> {
-    setOpen(false);
-    setBusy(true);
-    try {
-      const res = await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
-      if (!res.ok) {
-        // optional: read error text and show
-        // eslint-disable-next-line no-console
-        console.error("Logout failed", await res.text().catch(() => "no body"));
-        setBusy(false);
-        return;
-      }
-
-      // notify components in this tab instantly
-      window.dispatchEvent(new Event("auth"));
-      // notify other tabs
-      try {
-        localStorage.setItem("auth", String(Date.now()));
-      } catch {
-        /* ignore if storage blocked */
-      }
-
-      // revalidate server components (layout/header)
-      router.refresh();
-      router.push("/login");
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("Logout error", err);
-    } finally {
-      setBusy(false);
-    }
+  if (user === undefined) {
+    return <div className="px-4">...</div>; // placeholder while loading
   }
 
-  // While still loading initial value show nothing (or a spinner)
-  if (localUser === undefined) {
-    return <div className="px-4">...</div>;
-  }
-
-  if (!localUser) {
+  if (!user) {
     return (
       <div className="flex items-center gap-3">
-        <Link href="/login" className="text-sm px-3 py-1 border rounded hover:bg-gray-50">
-          Login
-        </Link>
-        <Link href="/register" className="text-sm px-3 py-1 bg-gray-800 text-white rounded hover:bg-gray-900">
-          Register
-        </Link>
+        <Link href="/login" className="text-sm px-3 py-1 border rounded hover:bg-gray-50">Login</Link>
+        <Link href="/register" className="text-sm px-3 py-1 bg-gray-800 text-white rounded hover:bg-gray-900">Register</Link>
       </div>
     );
   }
-  const profileImage = localUser.userDetails?.profileImage;
-  const avatarUrl =  localUser.userDetails?.profileImage?.url ?? "/media/user.png";
-  const displayName = localUser.userDetails?.fullName ?? localUser.username ?? localUser.email ?? "User";
+
+  const avatarUrl = user.userDetails?.profileImage?.url ?? "/media/user.png";
+  const displayName = user.userDetails?.fullName ?? user.username ?? user.email ?? "User";
 
   return (
     <div className="relative inline-block text-left">
-      <button
-        type="button"
-        onClick={() => setOpen((s) => !s)}
-        className="flex items-center gap-3 px-3 py-1 rounded hover:bg-gray-100"
-        aria-expanded={open}
-      >
-        {typeof avatarUrl === "string" && avatarUrl.startsWith("http") ? (
-          <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />
+      <button type="button" onClick={() => setOpen(s => !s)} className="flex items-center gap-3 px-3 py-1 rounded hover:bg-gray-100">
+        {avatarUrl.startsWith("http") ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatarUrl} alt={displayName} className="w-8 h-8 rounded-full object-cover" />
         ) : (
           <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />
         )}
@@ -133,21 +69,11 @@ export default function AuthMenu({ user }: Props) {
       {open && (
         <div className="absolute right-0 mt-2 w-44 rounded-md bg-white shadow-lg ring-1 ring-black ring-opacity-5">
           <div className="py-1">
-            <Link href="/account" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setOpen(false)}>
-              Profile
-            </Link>
-
-            <button
-              type="button"
-              onClick={async () => {
-                setOpen(false);
-                await handleLogout();
-              }}
-              disabled={busy}
-              className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              {busy ? "Logging out…" : "Logout"}
-            </button>
+            <Link href="/account" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" onClick={() => setOpen(false)}>Profile</Link>
+            <button type="button" onClick={() => { setOpen(false); void (async () => {
+              await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+              window.dispatchEvent(new Event("auth")); localStorage.setItem("auth", String(Date.now())); router.refresh(); router.push("/login");
+            })(); }} className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Logout</button>
           </div>
         </div>
       )}
