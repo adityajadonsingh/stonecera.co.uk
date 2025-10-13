@@ -5,7 +5,7 @@ export async function PUT(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const STRAPI = (process.env.STRAPI_API_URL ?? "http://localhost:1337").replace(/\/+$/, "");
+  const STRAPI = process.env.STRAPI_API_URL;
   try {
     const params = await context.params;
     const id = params.id;
@@ -49,7 +49,7 @@ export async function DELETE(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
-  const STRAPI = (process.env.STRAPI_API_URL ?? "http://localhost:1337").replace(/\/+$/, "");
+  const STRAPI = process.env.STRAPI_API_URL;
   try {
     const params = await context.params;
     const id = params.id;

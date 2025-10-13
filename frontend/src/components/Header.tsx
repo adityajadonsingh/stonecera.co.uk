@@ -1,14 +1,13 @@
 // FILE: frontend/src/app/components/Header.tsx
 import Link from "next/link";
 import Image from "next/image";
-import { cookies } from "next/headers";
 import type { Category, AppUser } from "@/lib/types";
 import { getAllCategories } from "@/lib/api/category";
 import CategoryMenu from "./CategoryMenu";
 import AuthMenu from "./AuthMenu";
 import { getCurrentUser } from "@/lib/auth";
 
-const STRAPI = process.env.STRAPI_API_URL ?? "http://localhost:1337";
+const STRAPI = process.env.STRAPI_API_URL;
 
 export default async function Header() {
   // Fetch categories (server-side helper)

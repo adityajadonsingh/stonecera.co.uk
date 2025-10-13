@@ -6,9 +6,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
   const token = cookieStore.get("token")?.value;
   if (!token) return null;
 
-  const STRAPI = (
-    process.env.STRAPI_API_URL ?? "http://localhost:1337"
-  ).replace(/\/+$/, "");
+  const STRAPI = process.env.STRAPI_API_URL;
   try {
     const res = await fetch(`${STRAPI}/api/user-details/me`, {
       headers: { Authorization: `Bearer ${token}` },

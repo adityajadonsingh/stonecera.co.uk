@@ -3,7 +3,7 @@
 import { NextRequest } from 'next/server';
 
 export async function POST(req: NextRequest) {
-  const STRAPI = process.env.STRAPI_API_URL || "http://localhost:1337";
+  const STRAPI = process.env.STRAPI_API_URL;
 
   try {
     const body = await req.json(); // { identifier, password }

@@ -12,7 +12,7 @@ function isStringOrNumber(x: unknown): x is string | number {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const STRAPI = (process.env.STRAPI_API_URL ?? "http://localhost:1337").replace(/\/+$/, "");
+  const STRAPI = process.env.STRAPI_API_URL;
 
   try {
     const bodyUnknown = (await req.json()) as unknown;

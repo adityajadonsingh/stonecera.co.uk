@@ -6,7 +6,7 @@ function isRecord(x: unknown): x is Record<string, unknown> {
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
-  const STRAPI = process.env.STRAPI_API_URL ?? "http://localhost:1337";
+  const STRAPI = process.env.STRAPI_API_URL;
 
   try {
     const token = req.cookies.get("token")?.value;

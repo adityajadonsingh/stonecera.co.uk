@@ -25,7 +25,7 @@ function extractFileRecord(json: unknown): Record<string, unknown> | null {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const STRAPI = (process.env.STRAPI_API_URL ?? "http://localhost:1337").replace(/\/+$/, "");
+  const STRAPI = process.env.STRAPI_API_URL;
   try {
     const token = req.cookies.get("token")?.value;
     if (!token) {

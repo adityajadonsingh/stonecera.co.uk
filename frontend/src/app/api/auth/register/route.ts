@@ -11,7 +11,7 @@ type RegisterRequestBody = {
 type JsonObject = Record<string, unknown>;
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const base = process.env.STRAPI_API_URL ?? "http://localhost:1337";
+  const base = process.env.STRAPI_API_URL;
   const endpoint = new URL("/api/auth/local/register", base).toString();
 
   try {

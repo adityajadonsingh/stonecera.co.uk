@@ -1,7 +1,7 @@
 // src/lib/auth.ts
 import { cookies } from "next/headers";
 
-const STRAPI = process.env.STRAPI_API_URL ?? "http://localhost:1337";
+const STRAPI = process.env.STRAPI_API_URL;
 
 export async function getCurrentUser() {
   try {
