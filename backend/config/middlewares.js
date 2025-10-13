@@ -5,7 +5,7 @@ export default [
   {
     name: "strapi::cors",
     config: {
-      origin: ["http://localhost:3000"],
+      origin: ["http://localhost:3000", "https://dev.stonecera.co.uk/", "https://stonecera.co.uk/"],
       methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
       credentials: true,
     },
