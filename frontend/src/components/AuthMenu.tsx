@@ -123,7 +123,6 @@ export default function AuthMenu({ user }: Props) {
         aria-expanded={open}
       >
         {typeof avatarUrl === "string" && avatarUrl.startsWith("http") ? (
-          // eslint-disable-next-line @next/next/no-img-element
           <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />
         ) : (
           <Image src={avatarUrl} alt={displayName} width={32} height={32} className="rounded-full object-cover" />

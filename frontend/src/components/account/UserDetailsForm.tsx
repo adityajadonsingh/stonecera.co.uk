@@ -12,6 +12,20 @@ interface Props {
 type SimplePhone = { phone?: string };
 type SimpleAddress = { address?: string };
 
+function isRecord(x: unknown): x is Record<string, unknown> {
+  return typeof x === "object" && x !== null;
+}
+
+function toNumber(x: unknown): number | null {
+  if (typeof x === "number" && Number.isFinite(x)) return x;
+  if (typeof x === "string" && x.trim() !== "" && !Number.isNaN(Number(x))) return Number(x);
+  return null;
+}
+
+function toString(x: unknown): string | null {
+  return typeof x === "string" && x.trim() !== "" ? x : null;
+}
+
 function toAbsolute(url?: string | null): string | null {
   if (!url) return null;
   if (url.startsWith("http")) return url;
@@ -19,8 +33,60 @@ function toAbsolute(url?: string | null): string | null {
   return base ? `${base}${url.startsWith("/") ? url : `/${url}`}` : url;
 }
 
-export default function UserDetailsForm({ initialData = null }: Props) {
+function getInitialProfileImageId(initial?: UserDetails | null): number | null {
+  const img = initial?.profileImage;
+  if (!isRecord(img)) {
+    // If typed (from UserDetails) the object is still a record at runtime; this guard is defensive
+    if (img && typeof (img as Record<string, unknown>).id === "number") {
+      return (img as Record<string, unknown>).id as number;
+    }
+    return null;
+  }
+  return toNumber(img["id"]);
+}
+
+function getInitialProfileImageUrl(initial?: UserDetails | null): string | null {
+  const url = initial?.profileImage?.url ?? null;
+  return url ? toAbsolute(url) : null;
+}
+
+function normalizePhones(input?: unknown): SimplePhone[] {
+  if (!Array.isArray(input)) return [{ phone: "" }];
+  return input.map((it) => {
+    if (isRecord(it) && typeof it.phone === "string") return { phone: it.phone };
+    return { phone: "" };
+  });
+}
+
+function normalizeAddresses(input?: unknown): SimpleAddress[] {
+  if (!Array.isArray(input)) return [{ address: "" }];
+  return input.map((it) => {
+    if (isRecord(it) && typeof it.address === "string") return { address: it.address };
+    return { address: "" };
+  });
+}
+
+function extractUploadInfo(json: unknown): { id: number | null; url: string | null } {
+  // This expects the upload proxy's normalized shapes (or Strapi's shapes).
+  if (!isRecord(json)) return { id: null, url: null };
+
+  // normalized proxy likely returns { id, url, name }
+  let id = toNumber(json["id"] ?? null);
+  if (id === null && isRecord(json["data"])) id = toNumber(json["data"]["id"]);
+  if (id === null && isRecord(json["attributes"])) id = toNumber((json["attributes"] as Record<string, unknown>)["id"]);
+  if (id === null && isRecord(json["data"]) && isRecord(json["data"]["attributes"])) id = toNumber(json["data"]["attributes"]["id"]);
+
+  let url = toString(json["url"] ?? null);
+  if (url === null && isRecord(json["attributes"])) url = toString(json["attributes"]["url"]);
+  if (url === null && isRecord(json["data"])) url = toString(json["data"]["url"]);
+  if (url === null && isRecord(json["data"]) && isRecord(json["data"]["attributes"])) url = toString(json["data"]["attributes"]["url"]);
+
+  return { id, url };
+}
+
+export default function UserDetailsForm({ initialData = null }: Props): JSX.Element {
   const router = useRouter();
+
   const [fullName, setFullName] = useState<string>(initialData?.fullName ?? "");
   const [phoneNumbers, setPhoneNumbers] = useState<SimplePhone[]>(
     initialData?.phoneNumbers && initialData.phoneNumbers.length ? initialData.phoneNumbers : [{ phone: "" }]
@@ -30,11 +96,9 @@ export default function UserDetailsForm({ initialData = null }: Props) {
   );
 
   const [profileImageUrl, setProfileImageUrl] = useState<string | null>(
-    initialData?.profileImage?.url ? toAbsolute(initialData.profileImage.url) : "/media/user.png"
+    getInitialProfileImageUrl(initialData) ?? "/media/user.png"
   );
-  const [profileImageId, setProfileImageId] = useState<number | null | undefined>(
-    (initialData?.profileImage as any)?.id ?? null
-  );
+  const [profileImageId, setProfileImageId] = useState<number | null>(getInitialProfileImageId(initialData));
 
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -45,27 +109,27 @@ export default function UserDetailsForm({ initialData = null }: Props) {
     setFullName(initialData?.fullName ?? "");
     setPhoneNumbers(initialData?.phoneNumbers && initialData.phoneNumbers.length ? initialData.phoneNumbers : [{ phone: "" }]);
     setSavedAddresses(initialData?.savedAddresses && initialData.savedAddresses.length ? initialData.savedAddresses : [{ address: "" }]);
-    setProfileImageUrl(initialData?.profileImage?.url ? toAbsolute(initialData.profileImage.url) : "/media/user.png");
-    setProfileImageId((initialData?.profileImage as any)?.id ?? null);
+    setProfileImageUrl(getInitialProfileImageUrl(initialData) ?? "/media/user.png");
+    setProfileImageId(getInitialProfileImageId(initialData));
   }, [initialData]);
 
-  function updatePhone(idx: number, val: string) {
+  function updatePhone(idx: number, val: string): void {
     setPhoneNumbers((s) => s.map((p, i) => (i === idx ? { phone: val } : p)));
   }
-  function removePhone(idx: number) {
+  function removePhone(idx: number): void {
     setPhoneNumbers((s) => s.filter((_, i) => i !== idx));
   }
-  function addPhone() {
+  function addPhone(): void {
     setPhoneNumbers((s) => [...s, { phone: "" }]);
   }
 
-  function updateAddress(idx: number, val: string) {
+  function updateAddress(idx: number, val: string): void {
     setSavedAddresses((s) => s.map((p, i) => (i === idx ? { address: val } : p)));
   }
-  function removeAddress(idx: number) {
+  function removeAddress(idx: number): void {
     setSavedAddresses((s) => s.filter((_, i) => i !== idx));
   }
-  function addAddress() {
+  function addAddress(): void {
     setSavedAddresses((s) => [...s, { address: "" }]);
   }
 
@@ -91,22 +155,21 @@ export default function UserDetailsForm({ initialData = null }: Props) {
       }
 
       const json = (await res.json()) as unknown;
-      // expected normalized shape: { id, url, name }
-      const id = (json as any)?.id ?? null;
-      const url = (json as any)?.url ?? null;
+      const { id, url } = extractUploadInfo(json);
+
       if (!id || !url) {
         setError("Upload did not return file info");
         return;
       }
-      setProfileImageId(Number(id));
-      setProfileImageUrl(toAbsolute(String(url)));
-    } catch (err) {
+
+      setProfileImageId(id);
+      setProfileImageUrl(toAbsolute(url));
+    } catch (err: unknown) {
       // eslint-disable-next-line no-console
       console.error("Upload error:", err);
-      setError("Upload error");
+      setError(err instanceof Error ? err.message : "Upload error");
     } finally {
       setUploading(false);
-      // clear input value so same file can be re-selected later
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   }
@@ -119,8 +182,8 @@ export default function UserDetailsForm({ initialData = null }: Props) {
     try {
       const payload = {
         fullName: fullName || null,
-        phoneNumbers: phoneNumbers.filter((p) => p.phone && String(p.phone).trim()),
-        savedAddresses: savedAddresses.filter((a) => a.address && String(a.address).trim()),
+        phoneNumbers: phoneNumbers.filter((p) => typeof p.phone === "string" && p.phone.trim()).map((p) => ({ phone: p.phone?.trim() })),
+        savedAddresses: savedAddresses.filter((a) => typeof a.address === "string" && a.address.trim()).map((a) => ({ address: a.address?.trim() })),
         profileImageId: profileImageId ?? null,
       };
 
@@ -145,16 +208,23 @@ export default function UserDetailsForm({ initialData = null }: Props) {
         /* ignore */
       }
 
-      // revalidate server components (Header) and navigate to /account
       router.refresh();
       router.push("/account");
-    } catch (err) {
+    } catch (err: unknown) {
       // eslint-disable-next-line no-console
       console.error("Save error:", err);
-      setError("Unexpected error");
+      setError(err instanceof Error ? err.message : "Unexpected error");
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleReset(): void {
+    setFullName(initialData?.fullName ?? "");
+    setPhoneNumbers(initialData?.phoneNumbers && initialData.phoneNumbers.length ? initialData.phoneNumbers : [{ phone: "" }]);
+    setSavedAddresses(initialData?.savedAddresses && initialData.savedAddresses.length ? initialData.savedAddresses : [{ address: "" }]);
+    setProfileImageUrl(getInitialProfileImageUrl(initialData) ?? "/media/user.png");
+    setProfileImageId(getInitialProfileImageId(initialData));
   }
 
   return (
@@ -234,18 +304,7 @@ export default function UserDetailsForm({ initialData = null }: Props) {
         <button disabled={saving} type="submit" className="px-4 py-2 bg-blue-600 text-white rounded">
           {saving ? "Saving…" : "Save"}
         </button>
-        <button
-          type="button"
-          onClick={() => {
-            // reset to initial
-            setFullName(initialData?.fullName ?? "");
-            setPhoneNumbers(initialData?.phoneNumbers && initialData.phoneNumbers.length ? initialData.phoneNumbers : [{ phone: "" }]);
-            setSavedAddresses(initialData?.savedAddresses && initialData.savedAddresses.length ? initialData.savedAddresses : [{ address: "" }]);
-            setProfileImageUrl(initialData?.profileImage?.url ? toAbsolute(initialData.profileImage.url) : "/media/user.png");
-            setProfileImageId((initialData?.profileImage as any)?.id ?? null);
-          }}
-          className="px-3 py-2 border rounded"
-        >
+        <button type="button" onClick={handleReset} className="px-3 py-2 border rounded">
           Reset
         </button>
       </div>

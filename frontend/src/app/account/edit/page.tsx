@@ -1,8 +1,8 @@
 // FILE: frontend/src/app/account/edit/page.tsx
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import UserDetailsForm from "@/components/account/UserDetailsForm";
 import { getCurrentUser } from "@/lib/auth";
+import UserDetailsForm from "@/components/account/UserDetailsForm";
 
 export const metadata: Metadata = {
   title: "Edit Profile",
