@@ -33,47 +33,39 @@ function toAbsolute(url?: string | null): string | null {
   return base ? `${base}${url.startsWith("/") ? url : `/${url}`}` : url;
 }
 
+/**
+ * Safely extract image id from a possibly-typed object:
+ * Cast through unknown -> Record<string, unknown> to avoid TS complaining
+ * about converting between incompatible object types.
+ */
 function getInitialProfileImageId(initial?: UserDetails | null): number | null {
   const img = initial?.profileImage;
-  if (!isRecord(img)) {
-    // If typed (from UserDetails) the object is still a record at runtime; this guard is defensive
-    if (img && typeof (img as Record<string, unknown>).id === "number") {
-      return (img as Record<string, unknown>).id as number;
-    }
-    return null;
-  }
-  return toNumber(img["id"]);
+  if (!img) return null;
+
+  // Cast via unknown to allow index access without using `any`
+  const record = img as unknown as Record<string, unknown>;
+  return toNumber(record["id"] ?? null);
 }
 
+/**
+ * Safely extract image url and return absolute URL (or null)
+ */
 function getInitialProfileImageUrl(initial?: UserDetails | null): string | null {
-  const url = initial?.profileImage?.url ?? null;
-  return url ? toAbsolute(url) : null;
-}
+  const img = initial?.profileImage;
+  if (!img) return null;
 
-function normalizePhones(input?: unknown): SimplePhone[] {
-  if (!Array.isArray(input)) return [{ phone: "" }];
-  return input.map((it) => {
-    if (isRecord(it) && typeof it.phone === "string") return { phone: it.phone };
-    return { phone: "" };
-  });
-}
-
-function normalizeAddresses(input?: unknown): SimpleAddress[] {
-  if (!Array.isArray(input)) return [{ address: "" }];
-  return input.map((it) => {
-    if (isRecord(it) && typeof it.address === "string") return { address: it.address };
-    return { address: "" };
-  });
+  const record = img as unknown as Record<string, unknown>;
+  const maybeUrl = toString(record["url"] ?? null);
+  return maybeUrl ? toAbsolute(maybeUrl) : null;
 }
 
 function extractUploadInfo(json: unknown): { id: number | null; url: string | null } {
   // This expects the upload proxy's normalized shapes (or Strapi's shapes).
   if (!isRecord(json)) return { id: null, url: null };
 
-  // normalized proxy likely returns { id, url, name }
   let id = toNumber(json["id"] ?? null);
   if (id === null && isRecord(json["data"])) id = toNumber(json["data"]["id"]);
-  if (id === null && isRecord(json["attributes"])) id = toNumber((json["attributes"] as Record<string, unknown>)["id"]);
+  if (id === null && isRecord(json["attributes"])) id = toNumber(json["attributes"]["id"]);
   if (id === null && isRecord(json["data"]) && isRecord(json["data"]["attributes"])) id = toNumber(json["data"]["attributes"]["id"]);
 
   let url = toString(json["url"] ?? null);
@@ -84,7 +76,7 @@ function extractUploadInfo(json: unknown): { id: number | null; url: string | nu
   return { id, url };
 }
 
-export default function UserDetailsForm({ initialData = null }: Props): JSX.Element {
+export default function UserDetailsForm({ initialData = null }: Props) {
   const router = useRouter();
 
   const [fullName, setFullName] = useState<string>(initialData?.fullName ?? "");
@@ -182,8 +174,12 @@ export default function UserDetailsForm({ initialData = null }: Props): JSX.Elem
     try {
       const payload = {
         fullName: fullName || null,
-        phoneNumbers: phoneNumbers.filter((p) => typeof p.phone === "string" && p.phone.trim()).map((p) => ({ phone: p.phone?.trim() })),
-        savedAddresses: savedAddresses.filter((a) => typeof a.address === "string" && a.address.trim()).map((a) => ({ address: a.address?.trim() })),
+        phoneNumbers: phoneNumbers
+          .filter((p) => typeof p.phone === "string" && p.phone.trim())
+          .map((p) => ({ phone: p.phone?.trim() })),
+        savedAddresses: savedAddresses
+          .filter((a) => typeof a.address === "string" && a.address.trim())
+          .map((a) => ({ address: a.address?.trim() })),
         profileImageId: profileImageId ?? null,
       };
 
