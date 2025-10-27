@@ -46,7 +46,7 @@ module.exports = {
     const created = await strapi.entityService.create("api::cart.cart", {
       data: {
         user: user.id,
-        uuid: Number(variation_id), // save numeric id
+        uuid: Number(variation_id), 
         quantity: Number(quantity),
         unit_price: unitPrice,
         product: productId,

@@ -52,10 +52,9 @@ export default function RegisterForm() {
         return;
       }
 
-      // If Strapi returned JWT and we set cookie via API route, user is logged in.
-      // If Strapi requires email confirmation, response will indicate that.
-      // If registration returns user, redirect to account or show message.
-      router.refresh(); // refresh server components
+      // If Strapi requires email confirmation, response will indicate that
+      // If registration returns user, redirect to account or show message
+      router.refresh(); 
       router.push("/account");
     } catch (err) {
       console.error("Register error:", err);
