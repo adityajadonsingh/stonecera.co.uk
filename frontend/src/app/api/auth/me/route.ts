@@ -10,31 +10,30 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
 
   try {
     const token = req.cookies.get("token")?.value;
-    if (!token) {
-      return NextResponse.json({ user: null }, { status: 401 });
-    }
+    if (!token) return NextResponse.json({ user: null }, { status: 401 });
 
-    const url = new URL("/api/user-details/me", STRAPI).toString();
+    // 🡒 use Redis-cached endpoint
+    const url = `${STRAPI}/api/user-details/redis`;
 
     const upstream = await fetch(url, {
       headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
     });
 
     const contentType = upstream.headers.get("content-type") ?? "";
     if (!contentType.includes("application/json")) {
       const text = await upstream.text();
-      return new NextResponse(text, { status: upstream.status, headers: { "Content-Type": "text/plain" } });
+      return new NextResponse(text, {
+        status: upstream.status,
+        headers: { "Content-Type": "text/plain" },
+      });
     }
 
-    const json = (await upstream.json()) as unknown;
-
-    // ensure we return an object or null
+    const json = await upstream.json();
     if (!isRecord(json) && json !== null) {
       return NextResponse.json({ user: null }, { status: 500 });
     }
-
-    // return the normalized object (id, username, email, userDetails)
-    return NextResponse.json(json as Record<string, unknown> | null, { status: upstream.status });
+    return NextResponse.json(json, { status: upstream.status });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "Server error";
     console.error("[/api/auth/me] ERROR:", error);

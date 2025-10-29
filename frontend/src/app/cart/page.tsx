@@ -2,7 +2,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import type { Product } from "@/lib/types";
 
 type MinimalImage = { url: string; alt?: string | null };
 
@@ -10,7 +9,14 @@ type MinimalProduct = {
   id?: number;
   name?: string;
   slug?: string;
-  images?: MinimalImage[];
+  image?: string | null;       // prefer single image returned by backend
+  images?: MinimalImage[];     // fallback array
+  [key: string]: unknown;
+};
+
+type Variation = {
+  id?: number | string | null;
+  stock?: number | null;
   [key: string]: unknown;
 };
 
@@ -20,6 +26,7 @@ type NormalizedItem = {
   unit_price?: number | null;
   product?: MinimalProduct | null;
   metadata?: Record<string, unknown> | null;
+  variation?: Variation | null;
 };
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -32,53 +39,38 @@ function toNumber(x: unknown): number | null {
   return null;
 }
 
-function toString(x: unknown): string | null {
-  return typeof x === "string" && x.trim() !== "" ? x : null;
-}
-
 function extractImages(obj: unknown): MinimalImage[] {
   if (!obj) return [];
-
-  // If it's already an array of possible image objects
   if (Array.isArray(obj)) {
-    const imgs: MinimalImage[] = [];
-    for (const item of obj) {
-      if (!isRecord(item)) continue;
-
-      // shape: { url, alt? }
-      if (typeof item.url === "string") {
-        imgs.push({
-          url: item.url,
-          alt: typeof item.alt === "string" ? item.alt : null,
-        });
-        continue;
-      }
-
-      // shape: { attributes: { url, alternativeText? } }
-      if (isRecord(item.attributes) && typeof item.attributes.url === "string") {
-        const attrs = item.attributes as Record<string, unknown>;
-        imgs.push({
-          url: String(attrs.url),
-          alt: typeof attrs.alternativeText === "string" ? String(attrs.alternativeText) : null,
-        });
-        continue;
-      }
-    }
-    return imgs;
+    return obj
+      .map((it) => {
+        if (!isRecord(it)) return null;
+        if (typeof it.url === "string") return { url: it.url, alt: typeof it.alt === "string" ? it.alt : null };
+        if (isRecord(it.attributes) && typeof it.attributes.url === "string") {
+          const attrs = it.attributes as Record<string, unknown>;
+          return { url: String(attrs.url), alt: typeof attrs.alternativeText === "string" ? String(attrs.alternativeText) : null };
+        }
+        return null;
+      })
+      .filter((x): x is MinimalImage => x !== null);
   }
-
-  // relation shape: { data: [...] } or { data: { ... } }
-  if (isRecord(obj) && Array.isArray(obj.data)) {
-    return extractImages(obj.data);
-  }
-  if (isRecord(obj) && isRecord(obj.data)) {
-    return extractImages(obj.data);
-  }
-
+  if (isRecord(obj) && Array.isArray(obj.data)) return extractImages(obj.data);
+  if (isRecord(obj) && isRecord(obj.data)) return extractImages([obj.data]);
   return [];
 }
 
-export default function CartPage() {
+function resolveImageUrl(product?: MinimalProduct | null, metadata?: Record<string, unknown>): string | null {
+  // Prefer product.image if backend set it
+  const candidate = (product?.image ?? product?.images?.[0]?.url ?? metadata?.productImage ?? metadata?.product_image ?? null) as unknown;
+  if (!candidate) return null;
+  if (typeof candidate !== "string") return null;
+  if (candidate.startsWith("http")) return candidate;
+  // If relative path returned, prefix with NEXT_PUBLIC_MEDIA_URL (if set)
+  const base = process.env.NEXT_PUBLIC_MEDIA_URL ?? "";
+  return `${base.replace(/\/$/, "")}${candidate.startsWith("/") ? candidate : `/${candidate}`}`;
+}
+
+export default function CartPage(): JSX.Element {
   const [items, setItems] = useState<NormalizedItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [updatingId, setUpdatingId] = useState<number | null>(null);
@@ -114,63 +106,99 @@ export default function CartPage() {
   }, []);
 
   const normalizeCartRaw = (raw: unknown): NormalizedItem[] => {
-    // handle shapes: array, { data: [] }, single { data: { ... } }, { items: [] }, etc.
+    if (!raw) return [];
     let arr: unknown[] = [];
 
-    if (!raw) return [];
+    // accept multiple shapes
     if (Array.isArray(raw)) arr = raw;
     else if (isRecord(raw) && Array.isArray(raw.data)) arr = raw.data;
-    else if (isRecord(raw) && isRecord(raw.data) && (typeof raw.data.id !== "undefined" || typeof raw.data.attributes !== "undefined")) arr = [raw.data];
-    else if (isRecord(raw) && Array.isArray(raw.items)) arr = raw.items;
-    else if (isRecord(raw) && Array.isArray(raw.cart)) arr = raw.cart;
-    else if (isRecord(raw) && isRecord(raw.data) && Array.isArray(raw.data.items)) arr = raw.data.items;
+    else if (isRecord(raw) && isRecord(raw.data) && (typeof (raw as Record<string, unknown>).data.id !== "undefined" || typeof (raw as Record<string, unknown>).data.attributes !== "undefined")) arr = [raw.data];
+    else if (isRecord(raw) && Array.isArray((raw as Record<string, unknown>).items)) arr = (raw as Record<string, unknown>).items;
+    else if (isRecord(raw) && Array.isArray((raw as Record<string, unknown>).cart)) arr = (raw as Record<string, unknown>).cart;
+    else if (isRecord(raw) && isRecord((raw as Record<string, unknown>).data) && Array.isArray((raw as Record<string, unknown>).data.items)) arr = (raw as Record<string, unknown>).data.items;
     else return [];
 
     return arr.map((entry) => {
       const entryObj = isRecord(entry) ? entry : {};
       const attr = isRecord(entryObj.attributes) ? entryObj.attributes : entryObj;
 
-      // id extraction
-      const idCandidate = entryObj.id ?? (isRecord(attr) ? (attr.id ?? null) : null);
+      // If backend already returned minimal mapped item (our desired shape),
+      // just coerce types and return.
+      if (isRecord(entryObj) && isRecord(entryObj.product) && ("quantity" in entryObj)) {
+        const id = toNumber(entryObj.id ?? (attr && attr.id) ?? null) ?? 0;
+        const quantity = toNumber(entryObj.quantity ?? (attr && attr.quantity) ?? 1) ?? 1;
+        const unit_price = toNumber(entryObj.unit_price ?? (attr && (attr.unit_price ?? attr.price)) ?? null) ?? null;
+
+        const prod = entryObj.product as Record<string, unknown>;
+        const product: MinimalProduct = {
+          id: toNumber(prod.id) ?? undefined,
+          name: typeof prod.name === "string" ? String(prod.name) : undefined,
+          slug: typeof prod.slug === "string" ? String(prod.slug) : undefined,
+          image: typeof prod.image === "string" ? String(prod.image) : undefined,
+        };
+
+        // variation may already be present (id, stock)
+        let variation = null;
+        if (isRecord(entryObj.variation)) {
+          const v = entryObj.variation as Record<string, unknown>;
+          variation = {
+            id: v.id ?? v.ID ?? v.uuid ?? null,
+            stock: toNumber(v.stock ?? v.Stock ?? v.availableStock ?? v.available_stock ?? null),
+          } as unknown as Variation;
+        } else if (isRecord(entryObj.metadata) && (entryObj.metadata as Record<string, unknown>).availableStock) {
+          variation = { stock: toNumber((entryObj.metadata as Record<string, unknown>).availableStock) ?? null };
+        }
+
+        const metadata = isRecord(entryObj.metadata) ? (entryObj.metadata as Record<string, unknown>) : null;
+
+        return {
+          id: Number(id),
+          quantity: Number(quantity),
+          unit_price,
+          product,
+          metadata,
+          variation,
+        } as NormalizedItem;
+      }
+
+      // fallback: older DB shapes, try to extract product and metadata
+      const idCandidate = entryObj.id ?? (isRecord(attr) ? attr.id ?? null : null);
       const idNum = toNumber(idCandidate) ?? 0;
 
-      // quantity
       const qtyCandidate = isRecord(attr) ? (attr.quantity ?? attr.qty ?? 1) : 1;
-      const qtyNum = toNumber(qtyCandidate) ?? (typeof qtyCandidate === "string" ? Number(qtyCandidate) || 1 : 1);
+      const qtyNum = toNumber(qtyCandidate) ?? 1;
 
-      // unit_price
       const priceCandidate = isRecord(attr) ? (attr.unit_price ?? attr.unitPrice ?? attr.price ?? null) : null;
-      const unitPriceNum = toNumber(priceCandidate);
+      const unitPriceNum = toNumber(priceCandidate) ?? null;
 
-      // product normalization
-      const productField = isRecord(attr) ? (attr.product ?? null) : null;
-      let productEntity: unknown = null;
-
-      if (isRecord(productField) && isRecord(productField.data)) productEntity = productField.data;
-      else productEntity = productField;
-
-      const productAttrs = isRecord(productEntity) && isRecord(productEntity.attributes) ? productEntity.attributes : (isRecord(productEntity) ? productEntity : null);
-
+      // product
+      const productField = isRecord(attr) ? attr.product ?? null : null;
       let product: MinimalProduct | null = null;
-      if (productAttrs && isRecord(productAttrs)) {
-        const pId = toNumber((productEntity && isRecord(productEntity) && typeof (productEntity as Record<string, unknown>).id !== "undefined") ? (productEntity as Record<string, unknown>).id : productAttrs.id) ?? undefined;
-        const name = typeof productAttrs.name === "string" ? productAttrs.name : undefined;
-        const slug = typeof productAttrs.slug === "string" ? productAttrs.slug : undefined;
-        const imgs = extractImages(productAttrs.images ?? productAttrs.images);
+      if (isRecord(productField)) {
+        const p = isRecord(productField.data) ? productField.data : productField;
+        const pAttrs = isRecord(p.attributes) ? p.attributes : p;
+        const pId = toNumber((p as Record<string, unknown>).id ?? pAttrs?.id) ?? undefined;
+        const name = typeof pAttrs?.name === "string" ? String(pAttrs.name) : undefined;
+        const slug = typeof pAttrs?.slug === "string" ? String(pAttrs.slug) : undefined;
+        const imgs = extractImages(pAttrs?.images ?? pAttrs?.images);
         product = { id: pId, name, slug, images: imgs };
       }
 
       const metadata = isRecord(attr) && isRecord(attr.metadata) ? (attr.metadata as Record<string, unknown>) : null;
 
-      const normalized: NormalizedItem = {
+      // Try to read stock from metadata if backend didn't return variation
+      const stockFromMeta = isRecord(attr) && isRecord(attr.metadata)
+        ? toNumber((attr.metadata as Record<string, unknown>).availableStock ?? (attr.metadata as Record<string, unknown>).available_stock ?? (attr.metadata as Record<string, unknown>).stock ?? null)
+        : null;
+
+      return {
         id: Number(idNum),
         quantity: Number(qtyNum),
         unit_price: unitPriceNum ?? null,
         product,
         metadata,
-      };
-
-      return normalized;
+        variation: stockFromMeta !== null ? { stock: stockFromMeta } : undefined,
+      } as NormalizedItem;
     });
   };
 
@@ -187,7 +215,7 @@ export default function CartPage() {
       }
     } catch (e: unknown) {
       // eslint-disable-next-line no-console
-      console.error("remove error", e);
+      console.error("remove error:", e);
       alert("Server error");
     } finally {
       setRemovingId(null);
@@ -198,10 +226,17 @@ export default function CartPage() {
     if (qty < 1) return;
     setUpdatingId(itemId);
     try {
+      const item = items.find((it) => it.id === itemId);
+      const stock = item?.variation?.stock ?? null;
+      const qtyToSend = stock !== null && stock !== undefined ? Math.min(Number(qty), Number(stock)) : qty;
+      if (stock !== null && qty > stock) {
+        alert(`Only ${stock} available in stock. Quantity adjusted.`);
+      }
+
       const res = await fetch(`/api/cart/${itemId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ quantity: qty }),
+        body: JSON.stringify({ quantity: qtyToSend }),
         credentials: "include",
       });
       if (!res.ok) {
@@ -226,7 +261,7 @@ export default function CartPage() {
   if (loading) return <div className="p-6">Loading cart…</div>;
   if (err) return <div className="p-6 text-red-600">Error: {err}</div>;
   if (!items.length) return <div className="p-6">Your cart is empty.</div>;
-
+  console.log(items);
   return (
     <div className="p-6">
       <h1 className="text-2xl mb-4">Cart</h1>
@@ -246,13 +281,13 @@ export default function CartPage() {
           <tbody>
             {items.map((it) => {
               const product = it.product;
-              const imageUrl = product?.images?.[0]?.url
-                ? (product.images[0].url.startsWith("http")
-                    ? product.images[0].url
-                    : `${process.env.NEXT_PUBLIC_MEDIA_URL ?? ""}${product.images[0].url}`)
+              const imageUrl = product?.image ?? product?.images?.[0]?.url
+                ? (product?.image ?? product?.images?.[0]?.url).toString().startsWith("http")
+                    ? (product?.image ?? product?.images?.[0]?.url).toString()
+                    : `${process.env.NEXT_PUBLIC_MEDIA_URL ?? ""}${(product?.image ?? product?.images?.[0]?.url).toString()}`
                 : null;
-
               const unitPriceNum = typeof it.unit_price === "number" ? it.unit_price : Number(it.unit_price ?? 0);
+              const stockNum = it.variation?.stock ?? undefined;
 
               return (
                 <tr key={it.id} className="odd:bg-white even:bg-gray-50">
@@ -278,9 +313,12 @@ export default function CartPage() {
                       <input
                         type="number"
                         min={1}
+                        max={stockNum ?? 9999}
                         value={it.quantity}
                         onChange={(e) => {
-                          const next = Math.max(1, Number(e.target.value || 1));
+                          const max = stockNum ?? 9999;
+                          const raw = Number(e.target.value || 1);
+                          const next = Math.max(1, Math.min(raw, max));
                           setItems((s) => s.map((x) => (x.id === it.id ? { ...x, quantity: next } : x)));
                         }}
                         className="w-20 border rounded px-2 py-1 text-sm"
@@ -293,6 +331,11 @@ export default function CartPage() {
                         {updatingId === it.id ? "Updating..." : "Update"}
                       </button>
                     </div>
+                    {stockNum !== undefined && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {stockNum > 0 ? `${stockNum} in stock` : "Out of stock"}
+                      </div>
+                    )}
                   </td>
 
                   <td className="p-3 border">£{(unitPriceNum * it.quantity).toFixed(2)}</td>

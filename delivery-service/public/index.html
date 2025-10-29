@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Delivery Service Admin</title>
+  <style>
+    body { font-family: sans-serif; margin: 40px; }
+    input, button { padding: 8px; margin: 5px; }
+    table { border-collapse: collapse; margin-top: 20px; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    .small-input { width: 100px; }
+  </style>
+</head>
+<body>
+  <h1>📦 Delivery Service Admin</h1>
+
+  <h2>Find / Update / Add Postcode</h2>
+  <form id="postcodeForm">
+    <label>Postcode:</label>
+    <input id="postcode" required placeholder="e.g. RG or RG6 or RG6 5UC" />
+    <button type="submit">Search</button>
+  </form>
+
+  <div id="result"></div>
+
+  <script>
+    const form = document.getElementById("postcodeForm");
+    const resultDiv = document.getElementById("result");
+
+    async function fetchAndDisplay(postcode) {
+      resultDiv.innerHTML = "⏳ Searching...";
+      const res = await fetch(`/api/delivery/search/${encodeURIComponent(postcode)}`);
+      if (res.status === 404) {
+        resultDiv.innerHTML = `
+          <p>No records found for '${postcode}'. Add new:</p>
+          <form id="addForm">
+            Economy: <input id="newEconomy" type="number" step="0.01" required />
+            Premium: <input id="newPremium" type="number" step="0.01" required />
+            <button type="submit">Add</button>
+          </form>`;
+        document.getElementById("addForm").onsubmit = async (ev) => {
+          ev.preventDefault();
+          const economy = document.getElementById("newEconomy").value;
+          const premium = document.getElementById("newPremium").value;
+          await fetch(`/api/delivery`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ postcode, economy, premium }),
+          });
+          resultDiv.innerHTML = "✅ Added successfully!";
+        };
+        return;
+      }
+
+      const data = await res.json();
+
+      let html = `
+        <table>
+          <tr>
+            <th>Postcode</th>
+            <th>Economy (£)</th>
+            <th>Premium (£)</th>
+            <th>Actions</th>
+          </tr>
+      `;
+
+      data.forEach(row => {
+        html += `
+          <tr>
+            <td>${row.postcode}</td>
+            <td><input class="small-input" id="eco-${row.postcode}" value="${row.economy_price}" /></td>
+            <td><input class="small-input" id="prem-${row.postcode}" value="${row.premium_price}" /></td>
+            <td><button onclick="updateRow('${row.postcode}')">💾 Update</button></td>
+          </tr>
+        `;
+      });
+
+      html += "</table>";
+      resultDiv.innerHTML = html;
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const postcode = document.getElementById("postcode").value.trim();
+      if (postcode) fetchAndDisplay(postcode);
+    });
+
+    async function updateRow(postcode) {
+      const economy = document.getElementById(`eco-${postcode}`).value;
+      const premium = document.getElementById(`prem-${postcode}`).value;
+      await fetch(`/api/delivery/${encodeURIComponent(postcode)}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ economy, premium }),
+      });
+      alert(`✅ Updated ${postcode} successfully`);
+    }
+  </script>
+</body>
+</html>
