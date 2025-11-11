@@ -1,27 +1,35 @@
-// src/app/account/page.tsx
 import { getCurrentUser } from "@/lib/auth";
-import LogoutButton from "@/components/auth/LogoutButton";
 import Link from "next/link";
-export default async function AccountPage() {
+import { redirect } from "next/navigation";
+
+export default async function AccountDashboardPage() {
   const user = await getCurrentUser();
 
   if (!user) {
-    return (
-      <main className="max-w-3xl mx-auto p-6">
-        <h1 className="text-2xl font-semibold mb-4">Account</h1>
-        <p>You are not logged in. <Link href="/login">Login</Link></p>
-      </main>
-    );
+    redirect("/login");
   }
 
   return (
-    <main className="max-w-3xl mx-auto p-6">
-      <h1 className="text-2xl font-semibold mb-4">Account</h1>
-      <p>Welcome, <strong>{user.username ?? user.email}</strong></p>
-      <pre className="mt-4 text-sm p-3 rounded">{JSON.stringify(user, null, 2)}</pre>
-      <div className="mt-4">
-        <LogoutButton />
-      </div>
-    </main>
+    <div>
+      <h1 className="text-2xl font-semibold mb-4">Dashboard</h1>
+      <p className="text-gray-700">
+        Hello, <strong>{user.userDetails?.fullName ?? user.username}</strong>!
+      </p>
+      <p className="mt-2 text-gray-600">
+        From your account dashboard you can view your{" "}
+        <Link href="/account/orders" className="text-blue-600 hover:underline">
+          recent orders
+        </Link>
+        , manage your{" "}
+        <Link href="/account/addresses" className="text-blue-600 hover:underline">
+          shipping and billing addresses
+        </Link>
+        , and{" "}
+        <Link href="/account/details" className="text-blue-600 hover:underline">
+          edit your password and account details
+        </Link>
+        .
+      </p>
+    </div>
   );
 }

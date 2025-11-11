@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import type { AppUser } from "@/lib/types";
 
 export default function AuthMenu() {
-  const [user, setUser] = useState<AppUser | null | undefined>(undefined); // undefined = loading
+  const [user, setUser] = useState<AppUser | null | undefined>(undefined);
   const [open, setOpen] = useState(false);
   const router = useRouter();
 

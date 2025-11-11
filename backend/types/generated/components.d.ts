@@ -7,6 +7,9 @@ export interface InputFieldsAddress extends Struct.ComponentSchema {
   };
   attributes: {
     address: Schema.Attribute.Text;
+    city: Schema.Attribute.String;
+    label: Schema.Attribute.String;
+    pincode: Schema.Attribute.String;
   };
 }
 
@@ -17,6 +20,23 @@ export interface InputFieldsPhone extends Struct.ComponentSchema {
   };
   attributes: {
     phone: Schema.Attribute.String;
+  };
+}
+
+export interface OrderOrderItem extends Struct.ComponentSchema {
+  collectionName: 'components_order_order_items';
+  info: {
+    displayName: 'Order Item';
+    icon: 'shopping-cart';
+  };
+  attributes: {
+    product: Schema.Attribute.Relation<'oneToOne', 'api::product.product'>;
+    product_name: Schema.Attribute.String;
+    quantity: Schema.Attribute.Integer;
+    sku: Schema.Attribute.String;
+    subtotal: Schema.Attribute.Decimal;
+    unit_price: Schema.Attribute.Decimal;
+    variation_id: Schema.Attribute.String;
   };
 }
 
@@ -125,6 +145,7 @@ declare module '@strapi/strapi' {
     export interface ComponentSchemas {
       'input-fields.address': InputFieldsAddress;
       'input-fields.phone': InputFieldsPhone;
+      'order.order-item': OrderOrderItem;
       'product.product-variation': ProductProductVariation;
       'seo.meta': SeoMeta;
     }

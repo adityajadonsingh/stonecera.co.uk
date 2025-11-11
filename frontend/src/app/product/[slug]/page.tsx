@@ -43,6 +43,7 @@ export default async function ProductPage({
   if (!product || !product.name) return notFound();
 
   const variations = product.variations ?? [];
+  console.log(variations);
   const fromPerM2 =
     variations.length > 0
       ? Math.min(...variations.map((v) => v.Per_m2 ?? Infinity))

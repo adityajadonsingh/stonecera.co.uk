@@ -110,13 +110,19 @@ export interface UpdateCartBody {
   unit_price?: number;
   metadata?: Record<string, unknown> | null;
 }
-
+export interface Address {
+  id: number;
+  label?: string;
+  address?: string;
+  city?: string;
+  pincode?: string;
+}
 export interface UserDetails {
   id?: number;
   fullName?: string | null;
   profileImage?: ImageAttributes | null;
   phoneNumbers?: Array<{ phone?: string }>;
-  savedAddresses?: Array<{ address?: string }>;
+  savedAddresses?: Address[];
 }
 
 export interface AppUser {

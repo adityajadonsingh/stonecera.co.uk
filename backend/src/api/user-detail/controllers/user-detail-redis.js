@@ -33,7 +33,7 @@ module.exports = {
   async get(ctx) {
     try {
       const user = ctx.state.user;
-      if (!user) return ctx.unauthorized("You must be logged in");
+      if (!user) return ctx.unauthorized("You must be logged in"); 
 
       const client = await redisService.connect();
       const key = `user:details:${user.id}`;
@@ -73,6 +73,7 @@ module.exports = {
         email: user.email ?? null,
         userDetails,
       };
+      
 
       // 3️⃣ save to cache (5 min TTL)
       await client.set(key, JSON.stringify(payload), { EX: 300 });
